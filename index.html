@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hitung Syariah — Kalkulator Waris Islam (KHI + Faraidh)</title>
+  <meta name="description" content="Hitung Syariah: kalkulator waris Islam edukatif berdasarkan KHI Indonesia dan faraidh. Hitung pembagian waris dengan langkah, dasar hukum, dan dalil. Data tersimpan lokal." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..600;1,9..144,400..600&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="#" onclick="HS.app.go('home');return false;">
+        <svg class="mark" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect x="2" y="2" width="44" height="44" rx="13" fill="#0f6b53"/>
+          <path d="M24 9l2.6 6.9 7.4.4-5.8 4.6 2 7.1L24 30.6l-6.2 3.8 2-7.1-5.8-4.6 7.4-.4L24 9z" fill="#b8893b"/>
+          <path d="M14 36c2.8 2 6.2 3 10 3s7.2-1 10-3" stroke="#e3f0ea" stroke-width="2.4" stroke-linecap="round"/>
+        </svg>
+        <span><b>Hitung Syariah</b><small>Kalkulator Waris Islam · KHI + Faraidh</small></span>
+      </a>
+      <nav class="nav" id="nav">
+        <button data-view="home">Beranda</button>
+        <button data-view="wizard">Kalkulator</button>
+        <button data-view="history">Riwayat</button>
+        <button data-view="about">Tentang</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="wrap">
+      <!-- HOME -->
+      <section class="view" id="view-home"></section>
+      <!-- WIZARD -->
+      <section class="view" id="view-wizard"></section>
+      <!-- RESULT -->
+      <section class="view" id="view-result"></section>
+      <!-- HISTORY -->
+      <section class="view" id="view-history"></section>
+      <!-- ABOUT -->
+      <section class="view" id="view-about"></section>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <div class="brand" style="gap:9px;">
+        <svg class="mark" style="width:28px;height:28px;" viewBox="0 0 48 48" fill="none"><rect x="2" y="2" width="44" height="44" rx="13" fill="#0f6b53"/><path d="M24 9l2.6 6.9 7.4.4-5.8 4.6 2 7.1L24 30.6l-6.2 3.8 2-7.1-5.8-4.6 7.4-.4L24 9z" fill="#b8893b"/></svg>
+        <b style="font-family:var(--font-head);font-size:16px;">Hitung Syariah</b>
+      </div>
+      <p class="legal"><b>Penting:</b> Hitung Syariah adalah alat bantu edukatif, simulatif, dan dokumentatif. Hasil perhitungan <b>bukan</b> putusan Pengadilan Agama, fatwa, atau nasihat hukum final. Untuk kasus nyata, sengketa, atau data yang belum pasti, konsultasikan dengan Pengadilan Agama, ahli faraidh, notaris, atau penasihat hukum yang berwenang.</p>
+      <p>Data waris Anda disimpan secara lokal di perangkat ini dan tidak dikirim ke server mana pun. · v0.1.0</p>
+    </div>
+  </footer>
+
+  <div id="toast"></div>
+  <input type="file" id="import-file" accept="application/json,.json" style="display:none" />
+
+  <script src="js/fraction.js"></script>
+  <script src="js/knowledge-base.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

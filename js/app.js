@@ -123,8 +123,43 @@
     return '<div class="progress">' + STEPS.map((_, i) =>
       `<div class="dot ${i < st.step ? 'done' : ''} ${i === st.step ? 'cur' : ''}"></div>`).join('') + '</div>';
   }
+  function moneyDigits(value) {
+    const digits = String(value == null ? '' : value).replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+    return digits === '' ? '' : digits;
+  }
+  function formatMoneyInput(value) {
+    const digits = moneyDigits(value);
+    return digits ? digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.') : '';
+  }
+  function parseMoneyInput(value) {
+    const digits = moneyDigits(value);
+    return digits ? Number(digits) : '';
+  }
+  function caretFromDigitCount(value, digitCount) {
+    if (digitCount <= 0) return 0;
+    let seen = 0;
+    for (let i = 0; i < value.length; i++) {
+      if (/\d/.test(value[i])) seen++;
+      if (seen >= digitCount) return i + 1;
+    }
+    return value.length;
+  }
+  function bindMoneyInputs(root) {
+    $$('[data-money]', root || document).forEach((el) => {
+      el.addEventListener('input', () => {
+        const raw = el.value;
+        const caret = el.selectionStart || raw.length;
+        const digitsBeforeCaret = moneyDigits(raw.slice(0, caret)).length;
+        const formatted = formatMoneyInput(raw);
+        el.value = formatted;
+        const nextCaret = caretFromDigitCount(formatted, digitsBeforeCaret);
+        try { el.setSelectionRange(nextCaret, nextCaret); } catch (e) {}
+      });
+      el.addEventListener('blur', () => { el.value = formatMoneyInput(el.value); });
+    });
+  }
   function money(name, val, ph) {
-    return `<div class="money-input"><input type="number" min="0" step="any" id="${name}" value="${val === '' || val == null ? '' : esc(val)}" placeholder="${ph || '0'}" /></div>`;
+    return `<div class="money-input"><input type="text" inputmode="numeric" pattern="[0-9.]*" autocomplete="off" data-money id="${name}" value="${esc(formatMoneyInput(val))}" placeholder="${esc(formatMoneyInput(ph || '0'))}" /></div>`;
   }
 
   function renderWizard() {
@@ -137,6 +172,7 @@
     else if (st.step === 4) body = stepSpecial();
     else if (st.step === 5) body = stepReview();
     v.innerHTML = progressBar() + body;
+    bindMoneyInputs(v);
     if (st.step === 3) bindHeirEvents();
   }
 
@@ -210,7 +246,7 @@
     const willsHtml = (e.wills || []).map((w, i) => `
       <div class="heir-row" style="grid-template-columns:1.4fr 1fr auto;">
         <div class="field full"><label>Penerima / keterangan wasiat</label><input type="text" data-will="desc" data-i="${i}" value="${esc(w.desc || '')}" placeholder="mis. yayasan / anak angkat"/></div>
-        <div class="field"><label>Nilai</label><div class="money-input"><input type="number" min="0" data-will="amount" data-i="${i}" value="${w.amount == null ? '' : esc(w.amount)}"/></div></div>
+        <div class="field"><label>Nilai</label><div class="money-input"><input type="text" inputmode="numeric" pattern="[0-9.]*" autocomplete="off" data-money data-will="amount" data-i="${i}" value="${esc(formatMoneyInput(w.amount))}"/></div></div>
         <button class="del" title="Hapus" onclick="HS.app.removeWill(${i})">${I.trash}</button>
       </div>`).join('');
     return `<div class="card">
@@ -363,8 +399,8 @@
       st.ci.estate.wills[i][k] = k === 'amount' ? valNum2(el.value) : el.value;
     });
   }
-  function valNum(id) { const el = $('#' + id); return el ? (el.value === '' ? '' : Number(el.value)) : ''; }
-  function valNum2(v) { return v === '' ? '' : Number(v); }
+  function valNum(id) { const el = $('#' + id); return el ? parseMoneyInput(el.value) : ''; }
+  function valNum2(v) { return parseMoneyInput(v); }
   function num(v) { return v == null || v === '' ? 0 : Number(v) || 0; }
   function specialLabel(k) {
     return ({ hasSubstitute: 'Ahli waris pengganti', isPolygamy: 'Poligami', hasIllegitimateChild: 'Anak luar perkawinan',

@@ -224,6 +224,8 @@ textarea { resize: vertical; min-height: 70px; }
 .note.medium .ico { color: var(--warn); }
 .note.low { background: var(--surface-2); border: 1px solid var(--line); }
 .note.low .ico { color: var(--muted); }
+.validation-stack { margin: 14px 0 16px; }
+.validation-stack .note:last-child { margin-bottom: 0; }
 .rec { display: flex; gap: 11px; padding: 13px 15px; border-radius: var(--radius-sm); margin-bottom: 10px; background: var(--primary-soft); }
 .rec .ico { color: var(--primary); flex: none; margin-top: 1px; }
 .rec .t { font-weight: 700; font-size: 14px; }

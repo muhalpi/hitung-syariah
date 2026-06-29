@@ -197,6 +197,70 @@ const badImport = {
 const bad = g.HS.storage.importJSON(JSON.stringify(badImport));
 eq('import relation tidak dikenal ditolak', bad.ok, false);
 
+console.log('TC27: Cucu laki-laki dan cucu perempuan dari anak laki-laki');
+r = calc(heirs(['grandson_from_son'], ['granddaughter_from_son']));
+eq('cucu laki-laki mendapat 2:1', approxFrac(r, 'grandson_from_son'), '2/3');
+eq('cucu perempuan mendapat 1:2', approxFrac(r, 'granddaughter_from_son'), '1/3');
+
+console.log('TC28: Anak perempuan + cucu perempuan dari anak laki-laki');
+r = calc(heirs(['daughter'], ['granddaughter_from_son']));
+eq('anak perempuan setelah rad', approxFrac(r, 'daughter'), '3/4');
+eq('cucu perempuan penyempurna setelah rad', approxFrac(r, 'granddaughter_from_son'), '1/4');
+
+console.log('TC29: Anak laki-laki menghalangi cucu');
+r = calc(heirs(['son'], ['grandson_from_son'], ['granddaughter_from_son']));
+eq('anak laki-laki menerima seluruh', approxFrac(r, 'son'), '1');
+eq('cucu laki-laki terhalang', r.excludedHeirs.some((e) => e.relation === 'grandson_from_son' && e.excludedReason === 'hajb'), true);
+eq('cucu perempuan terhalang', r.excludedHeirs.some((e) => e.relation === 'granddaughter_from_son' && e.excludedReason === 'hajb'), true);
+
+console.log('TC30: Kakek bersama anak laki-laki');
+r = calc(heirs(['grandfather'], ['son']));
+eq('kakek 1/6', approxFrac(r, 'grandfather'), '1/6');
+eq('anak laki-laki sisa', approxFrac(r, 'son'), '5/6');
+eq('warning kasus kakek', r.warnings.some((w) => w.type === 'grandfather_case'), true);
+
+console.log('TC31: Nenek terhalang ibu');
+r = calc(heirs(['mother'], ['grandmother']));
+eq('ibu menerima seluruh via rad', approxFrac(r, 'mother'), '1');
+eq('nenek terhalang ibu', r.excludedHeirs.some((e) => e.relation === 'grandmother' && e.excludedReason === 'hajb'), true);
+
+console.log('TC32: Saudari seayah kalalah');
+r = calc(heirs(['paternal_sister']));
+eq('saudari seayah sendiri menerima seluruh via rad', approxFrac(r, 'paternal_sister'), '1');
+eq('warning saudara seayah', r.warnings.some((w) => w.type === 'paternal_sibling_case'), true);
+
+console.log('TC33: Saudari kandung + saudari seayah');
+r = calc(heirs(['full_sister'], ['paternal_sister']));
+eq('saudari kandung setelah rad', approxFrac(r, 'full_sister'), '3/4');
+eq('saudari seayah penyempurna setelah rad', approxFrac(r, 'paternal_sister'), '1/4');
+eq('hasil saudari seayah complete', r.metadata.isComplete, true);
+
+console.log('TC34: Hibah hanya menjadi catatan');
+r = calculateInheritance({ mode: 'khi', estate: { grossAssets: 240000000, wills: [], grants: [{ status: 'review' }] }, heirs: heirs(['son']), special: {} });
+eq('anak tetap menerima seluruh', approxFrac(r, 'son'), '1');
+eq('warning hibah', r.warnings.some((w) => w.type === 'grants'), true);
+
+console.log('TC35: Poligami memberi warning dan istri berbagi bagian');
+r = calculateInheritance({ mode: 'khi', estate: { grossAssets: 240000000, wills: [] }, heirs: heirs(['wife', 3], ['son']), special: { isPolygamy: true } });
+eq('istri gabungan tetap 1/8', approxFrac(r, 'wife'), '1/8');
+eq('per istri 10 juta dari 240 juta', r.shares.find((x) => x.relation === 'wife').perHeadRupiah, 10000000);
+eq('warning poligami', r.warnings.some((w) => w.type === 'polygamy'), true);
+
+console.log('TC36: Tidak ada ahli waris');
+r = calc([]);
+eq('tidak ada share', r.shares.length, 0);
+eq('warning no heirs', r.warnings.some((w) => w.type === 'no_heirs'), true);
+eq('rekomendasi Pengadilan Agama', r.recommendations.some((x) => /Pengadilan Agama/.test(x.text + x.title)), true);
+
+console.log('TC37: Import edge cases ditolak');
+g.localStorage.clear();
+eq('import tanpa schemaVersion ditolak', g.HS.storage.importJSON(JSON.stringify({ cases: [] })).ok, false);
+eq('import cases bukan array ditolak', g.HS.storage.importJSON(JSON.stringify({ schemaVersion: '1', cases: {} })).ok, false);
+const negativeImport = { schemaVersion: '1', cases: [{ title: 'Negatif', input: { estate: { grossAssets: -1, wills: [] }, heirs: heirs(['son']) } }] };
+eq('import harta negatif ditolak', g.HS.storage.importJSON(JSON.stringify(negativeImport)).ok, false);
+const badCountImport = { schemaVersion: '1', cases: [{ title: 'Count buruk', input: { estate: { grossAssets: 1, wills: [] }, heirs: [{ relation: 'son', count: 0 }] } }] };
+eq('import jumlah ahli waris buruk ditolak', g.HS.storage.importJSON(JSON.stringify(badCountImport)).ok, false);
+
 console.log('\n================');
 console.log('PASS:', pass, 'FAIL:', fail);
 process.exit(fail ? 1 : 0);

@@ -65,7 +65,7 @@
     heirs: [],
     special: {},
   });
-  let st = { ci: blank(), step: 0, editingId: null, result: null, caseTitle: '' };
+  let st = { ci: blank(), step: 0, editingId: null, result: null, caseTitle: '', validation: null };
 
   const STEPS = ['Pengantar', 'Harta', 'Kewajiban', 'Ahli Waris', 'Kasus Khusus', 'Tinjau'];
 
@@ -100,15 +100,16 @@
   // HOME
   // =========================================================================
   function renderHome() {
-    $('#view-home').innerHTML = `
+    const v = $('#view-home');
+    v.innerHTML = `
       <div class="hero">
         <div class="bismillah">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
         <span class="kicker">${I.scale} KHI Indonesia + Faraidh</span>
         <h1>Hitung waris dengan <span class="accent">tenang</span> dan transparan</h1>
         <p>Hitung Syariah membantu Anda menyimulasikan pembagian waris Islam berdasarkan Kompilasi Hukum Islam (KHI) Indonesia dan kaidah faraidh — lengkap dengan langkah perhitungan, dasar hukum, dan dalil.</p>
         <div class="actions" style="justify-content:center;margin-top:24px;">
-          <button class="btn btn-primary" onclick="HS.app.startNew()">${I.calc} Mulai hitung waris</button>
-          <button class="btn btn-ghost" onclick="HS.app.go('about')">Pelajari dulu</button>
+          <button class="btn btn-primary" data-app-action="start-new">${I.calc} Mulai hitung waris</button>
+          <button class="btn btn-ghost" data-app-action="go" data-view-target="about">Pelajari dulu</button>
         </div>
       </div>
 
@@ -123,10 +124,11 @@
           <div class="f"><span class="ico">${I.lock}</span><div><b>Privasi terjaga</b><small>Data disimpan lokal di perangkat Anda. Tidak dikirim ke server.</small></div></div>
           <div class="f"><span class="ico">${I.users}</span><div><b>Ramah untuk awam</b><small>Wizard bertahap, penjelasan sederhana, dan tooltip istilah faraidh.</small></div></div>
         </div>
-      </div>`;
+        </div>`;
+    bindViewActions(v);
   }
 
-  function startNew() { st = { ci: blank(), step: 0, editingId: null, result: null, caseTitle: '' }; go('wizard'); }
+  function startNew() { st = { ci: blank(), step: 0, editingId: null, result: null, caseTitle: '', validation: null }; go('wizard'); }
 
   // =========================================================================
   // WIZARD
@@ -160,6 +162,8 @@
     $$('[data-money]', root || document).forEach((el) => {
       el.addEventListener('input', () => {
         const raw = el.value;
+        if (/[-−]/.test(raw)) el.dataset.moneyInvalid = 'negative';
+        else delete el.dataset.moneyInvalid;
         const caret = el.selectionStart || raw.length;
         const digitsBeforeCaret = moneyDigits(raw.slice(0, caret)).length;
         const formatted = formatMoneyInput(raw);
@@ -246,18 +250,42 @@
     else if (st.step === 5) body = stepReview();
     v.innerHTML = progressBar() + body;
     bindMoneyInputs(v);
+    bindViewActions(v);
     if (st.step === 3) bindHeirEvents();
   }
 
   function navButtons(opts) {
     opts = opts || {};
     const next = opts.nextLabel || 'Lanjut';
-    const nextFn = opts.nextFn || 'HS.app.next()';
+    const nextAction = opts.nextAction || 'next';
     return `<div class="actions">
-      ${st.step > 0 ? `<button class="btn btn-ghost" onclick="HS.app.prev()">Kembali</button>` : ''}
+      ${st.step > 0 ? `<button class="btn btn-ghost" data-app-action="prev">Kembali</button>` : ''}
       <div class="spacer"></div>
-      <button class="btn btn-primary" onclick="${nextFn}">${next}</button>
+      <button class="btn btn-primary" data-app-action="${nextAction}">${next}</button>
     </div>`;
+  }
+
+  function bindViewActions(root) {
+    $$('[data-app-action]', root || document).forEach((btn) => {
+      btn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        const action = btn.dataset.appAction;
+        if (action === 'start-new') return startNew();
+        if (action === 'go') return go(btn.dataset.viewTarget || 'home');
+        if (action === 'prev') return prev();
+        if (action === 'next') return next();
+        if (action === 'compute') return compute();
+        if (action === 'set-mode') return setMode(btn.dataset.mode || 'khi');
+        if (action === 'add-will') return addWill();
+        if (action === 'remove-will') return removeWill(Number(btn.dataset.index));
+        if (action === 'add-heir') return addHeir();
+        if (action === 'remove-heir') return removeHeir(Number(btn.dataset.index));
+        if (action === 'toggle-acc') return toggleAcc(Number(btn.dataset.index));
+        if (action === 'save-current') return saveCurrent();
+        if (action === 'export-current') return exportCurrent();
+        if (action === 'trigger-import') return triggerImport();
+      });
+    });
   }
 
   function stepIntro() {
@@ -273,8 +301,8 @@
       <div class="field">
         <label>Mode dasar hukum</label>
         <div class="mode-pill">
-          <button class="${st.ci.mode === 'khi' ? 'on' : ''}" onclick="HS.app.setMode('khi')">KHI Indonesia</button>
-          <button class="${st.ci.mode === 'faraidh' ? 'on' : ''}" onclick="HS.app.setMode('faraidh')">Faraidh klasik</button>
+          <button class="${st.ci.mode === 'khi' ? 'on' : ''}" data-app-action="set-mode" data-mode="khi">KHI Indonesia</button>
+          <button class="${st.ci.mode === 'faraidh' ? 'on' : ''}" data-app-action="set-mode" data-mode="faraidh">Faraidh klasik</button>
         </div>
         <div class="hint">Default adalah <b>KHI Indonesia</b>. Faraidh digunakan sebagai penjelas dan pembanding. Bila berbeda, KHI diutamakan.</div>
         <div class="disclaimer" style="margin-top:10px;"><span class="ico">${I.info}</span><p>Untuk kasus dasar, kedua mode <b>memberi hasil sama</b>. Perbedaan muncul pada: <b>ahli waris pengganti</b> & <b>wasiat wajibah</b> (hanya KHI), serta <b>sisa harta ketika hanya ada suami/istri</b> — di KHI sisa diberikan kepada pasangan, di faraidh klasik tidak (ke Baitul Mal).</p></div>
@@ -289,6 +317,7 @@
       <div class="card-head"><span class="step-tag">Langkah 2 dari 6</span></div>
       <h2>Harta peninggalan</h2>
       <p class="lead">Masukkan harta pribadi pewaris dan, bila ada, harta bersama (gono-gini).</p>
+      ${validationMarkup(st.validation)}
       <div class="field">
         <label>Harta pribadi pewaris</label>
         ${money('grossAssets', e.grossAssets, 'mis. 200000000')}
@@ -320,12 +349,13 @@
       <div class="heir-row" style="grid-template-columns:1.4fr 1fr auto;">
         <div class="field full"><label>Penerima / keterangan wasiat</label><input type="text" data-will="desc" data-i="${i}" value="${esc(w.desc || '')}" placeholder="mis. yayasan / anak angkat"/></div>
         <div class="field"><label>Nilai</label><div class="money-input"><input type="text" inputmode="numeric" pattern="[0-9.]*" autocomplete="off" data-money data-will="amount" data-i="${i}" value="${esc(formatMoneyInput(w.amount))}"/></div></div>
-        <button class="del" title="Hapus" onclick="HS.app.removeWill(${i})">${I.trash}</button>
+        <button class="del" title="Hapus" data-app-action="remove-will" data-index="${i}">${I.trash}</button>
       </div>`).join('');
     return `<div class="card">
       <div class="card-head"><span class="step-tag">Langkah 3 dari 6</span></div>
       <h2>Kewajiban & wasiat</h2>
       <p class="lead">Kewajiban pewaris diselesaikan sebelum harta dibagi.</p>
+      ${validationMarkup(st.validation)}
       <div class="field-row">
         <div class="field"><label>Biaya pengurusan jenazah</label>${money('funeralCost', e.funeralCost)}</div>
         <div class="field"><label>Biaya sakit sebelum wafat</label>${money('medicalCostBeforeDeath', e.medicalCostBeforeDeath)}</div>
@@ -334,7 +364,7 @@
       <hr class="divider" />
       <div class="field"><label>${tip(TIPS.wasiat, 'Wasiat')} (maksimal 1/3 harta)</label>
         <div id="wills-list">${willsHtml || '<div class="empty" style="padding:18px;">Belum ada wasiat.</div>'}</div>
-        <button class="btn btn-soft btn-sm" style="margin-top:8px;" onclick="HS.app.addWill()">${I.plus} Tambah wasiat</button>
+        <button class="btn btn-soft btn-sm" style="margin-top:8px;" data-app-action="add-will">${I.plus} Tambah wasiat</button>
       </div>
       <label class="check"><input type="checkbox" id="willsApproved" ${e.willsApprovedByAllHeirs ? 'checked' : ''}/>
         <div><div class="t">Wasiat melebihi 1/3 disetujui semua ahli waris</div><div class="d">Centang hanya bila benar-benar disetujui semua ahli waris (KHI Pasal 194).</div></div></label>
@@ -349,8 +379,9 @@
       <div class="card-head"><span class="step-tag">Langkah 4 dari 6</span></div>
       <h2>Ahli waris</h2>
       <p class="lead">Tambahkan setiap kelompok ahli waris beserta jumlahnya.</p>
+      ${validationMarkup(st.validation)}
       <div id="heirs-list">${renderHeirRows()}</div>
-      <button class="btn btn-soft btn-sm" style="margin-top:6px;" onclick="HS.app.addHeir()">${I.plus} Tambah ahli waris</button>
+      <button class="btn btn-soft btn-sm" style="margin-top:6px;" data-app-action="add-heir">${I.plus} Tambah ahli waris</button>
       <div class="disclaimer" style="margin-top:16px;">
         <span class="ico">${I.info}</span>
         <p>Jenis kelamin ditentukan otomatis dari jenis hubungan. Untuk ahli waris pengganti (cucu menggantikan), pilih hubungan <b>Cucu (ahli waris pengganti)</b> dan tandai pada langkah berikutnya.</p>
@@ -366,7 +397,7 @@
         `<optgroup label="${g}">` + rels.map((r) => `<option value="${r}" ${h.relation === r ? 'selected' : ''}>${esc(E.HEIR_META[r].label)}</option>`).join('') + '</optgroup>').join('');
       return `<div class="heir-row" data-i="${i}">
         <div class="field"><label>Hubungan</label><select data-f="relation" data-i="${i}">${opts}</select></div>
-        <div class="field"><label>Jumlah</label><input type="number" min="1" data-f="count" data-i="${i}" value="${h.count || 1}"/></div>
+        <div class="field"><label>Jumlah</label><input type="number" min="1" data-f="count" data-i="${i}" value="${esc(h.count == null || h.count === '' ? '' : h.count)}"/></div>
         <div class="field"><label>Status</label><select data-f="status" data-i="${i}">
           <option value="ok" ${heirStatus(h) === 'ok' ? 'selected' : ''}>Berhak (Muslim, hidup)</option>
           <option value="non_muslim" ${heirStatus(h) === 'non_muslim' ? 'selected' : ''}>Beda agama</option>
@@ -374,7 +405,7 @@
           <option value="blocked" ${heirStatus(h) === 'blocked' ? 'selected' : ''}>Terhalang (mis. membunuh)</option>
           <option value="unknown" ${heirStatus(h) === 'unknown' ? 'selected' : ''}>Belum pasti</option>
         </select></div>
-        <button class="del" title="Hapus" onclick="HS.app.removeHeir(${i})">${I.trash}</button>
+        <button class="del" title="Hapus" data-app-action="remove-heir" data-index="${i}">${I.trash}</button>
       </div>`;
     }).join('');
   }
@@ -387,19 +418,17 @@
   }
   function bindHeirEvents() {
     $$('#heirs-list [data-f]').forEach((el) => {
-      el.addEventListener('change', (ev) => {
+      const update = (ev) => {
         const i = +ev.target.dataset.i, f = ev.target.dataset.f, h = st.ci.heirs[i];
         if (f === 'relation') { h.relation = ev.target.value; h.gender = E.HEIR_META[h.relation].gender === 'female' ? 'female' : 'male'; }
-        else if (f === 'count') h.count = Math.max(1, +ev.target.value || 1);
+        else if (f === 'count') h.count = ev.target.value === '' ? '' : Number(ev.target.value);
         else if (f === 'status') {
-          h.isLegallyBlocked = false; h.blockReason = undefined; h.religionStatus = 'muslim'; h.isAliveAtDeath = true;
-          const s = ev.target.value;
-          if (s === 'non_muslim') h.religionStatus = 'non_muslim';
-          else if (s === 'deceased') h.isAliveAtDeath = false;
-          else if (s === 'blocked') { h.isLegallyBlocked = true; h.blockReason = 'murder'; }
-          else if (s === 'unknown') h.religionStatus = 'unknown';
+          applyHeirStatus(h, ev.target.value);
+          if (ev.target.value === 'unknown') toast('Status belum pasti akan ditandai sebagai peringatan pada hasil.');
         }
-      });
+      };
+      el.addEventListener('change', update);
+      if (el.dataset.f === 'count') el.addEventListener('input', update);
     });
   }
 
@@ -434,6 +463,7 @@
       <div class="card-head"><span class="step-tag">Langkah 6 dari 6</span></div>
       <h2>Tinjau data</h2>
       <p class="lead">Periksa ringkasan sebelum menghitung.</p>
+      ${validationMarkup(validateAllInputs())}
       <div class="data-list">
         <div class="row"><span class="k">Mode dasar hukum</span><div>${c.mode === 'khi' ? 'KHI Indonesia' : 'Faraidh klasik'}</div></div>
         <div class="row"><span class="k">Harta pribadi pewaris</span><div>${fmt(num(e.grossAssets))}</div></div>
@@ -446,7 +476,7 @@
         <div class="row"><span class="k">Ahli waris (${c.heirs.length})</span><div>${heirList}</div></div>
         <div class="row"><span class="k">Kasus khusus</span><div>${specials.length ? specials.map((s) => '<span class="chip review">' + specialLabel(s) + '</span>').join(' ') : '<span class="muted">Tidak ada</span>'}</div></div>
       </div>
-      ${navButtons({ nextLabel: 'Hitung pembagian waris', nextFn: 'HS.app.compute()' })}
+      ${navButtons({ nextLabel: 'Hitung pembagian waris', nextAction: 'compute' })}
     </div>`;
   }
 
@@ -461,6 +491,8 @@
       collectWills();
       const ap = $('#willsApproved'); if (ap) e.willsApprovedByAllHeirs = ap.checked;
       const hg = $('#hasGrants'); if (hg) e.grants = hg.checked ? [{ status: 'review' }] : [];
+    } else if (st.step === 3) {
+      collectHeirs();
     } else if (st.step === 4) {
       $$('[data-sp]').forEach((el) => { st.ci.special[el.dataset.sp] = el.checked; });
     }
@@ -472,6 +504,29 @@
       st.ci.estate.wills[i][k] = k === 'amount' ? valNum2(el.value) : el.value;
     });
   }
+  function collectHeirs() {
+    $$('#heirs-list .heir-row').forEach((row) => {
+      const i = Number(row.dataset.i);
+      const h = st.ci.heirs[i];
+      if (!h) return;
+      const rel = row.querySelector('[data-f="relation"]');
+      const count = row.querySelector('[data-f="count"]');
+      const status = row.querySelector('[data-f="status"]');
+      if (rel && E.HEIR_META[rel.value]) {
+        h.relation = rel.value;
+        h.gender = E.HEIR_META[h.relation].gender === 'female' ? 'female' : 'male';
+      }
+      if (count) h.count = count.value === '' ? '' : Number(count.value);
+      if (status) applyHeirStatus(h, status.value);
+    });
+  }
+  function applyHeirStatus(h, status) {
+    h.isLegallyBlocked = false; h.blockReason = undefined; h.religionStatus = 'muslim'; h.isAliveAtDeath = true;
+    if (status === 'non_muslim') h.religionStatus = 'non_muslim';
+    else if (status === 'deceased') h.isAliveAtDeath = false;
+    else if (status === 'blocked') { h.isLegallyBlocked = true; h.blockReason = 'murder'; }
+    else if (status === 'unknown') { h.religionStatus = 'unknown'; h.isAliveAtDeath = undefined; }
+  }
   function valNum(id) { const el = $('#' + id); return el ? parseMoneyInput(el.value) : ''; }
   function valNum2(v) { return parseMoneyInput(v); }
   function num(v) { return v == null || v === '' ? 0 : Number(v) || 0; }
@@ -481,24 +536,149 @@
       farmlandUnder2ha: 'Lahan pertanian < 2 ha', hasUncertainStatus: 'Status belum pasti' }[k]) || k;
   }
 
-  function next() { collectStep(); if (st.step < 5) { st.step++; renderWizard(); window.scrollTo({ top: 0, behavior: 'smooth' }); } }
-  function prev() { collectStep(); if (st.step > 0) { st.step--; renderWizard(); window.scrollTo({ top: 0, behavior: 'smooth' }); } }
-  function setMode(m) { st.ci.mode = m; renderWizard(); }
+  function validationMarkup(v) {
+    const errors = (v && v.errors) || [];
+    const warnings = (v && v.warnings) || [];
+    if (!errors.length && !warnings.length) return '';
+    return `<div class="validation-stack">
+      ${errors.map((m) => `<div class="note high"><span class="ico">${I.warn}</span><div>${esc(m.message || m)}</div></div>`).join('')}
+      ${warnings.map((m) => `<div class="note medium"><span class="ico">${I.info}</span><div>${esc(m.message || m)}</div></div>`).join('')}
+    </div>`;
+  }
+  function issue(step, message) { return { step, message }; }
+  function clearValidation() { st.validation = null; }
+  function moneyInvalid(id, stateValue) {
+    const el = $('#' + id);
+    return (el && el.dataset.moneyInvalid === 'negative') || Number(stateValue) < 0 || /^[-−]/.test(String(stateValue || '').trim());
+  }
+  function currentMoney(id, stateValue) {
+    const el = $('#' + id);
+    if (el) return parseMoneyInput(el.value);
+    return stateValue == null ? '' : stateValue;
+  }
+  function validateMoneyNonNegative(errors, step, id, label, stateValue) {
+    if (moneyInvalid(id, stateValue)) errors.push(issue(step, label + ' tidak boleh bernilai negatif.'));
+  }
+  function validateEstateStep() {
+    const e = st.ci.estate;
+    const errors = [], warnings = [];
+    validateMoneyNonNegative(errors, 1, 'grossAssets', 'Harta pribadi pewaris', e.grossAssets);
+    validateMoneyNonNegative(errors, 1, 'jointPropertyTotal', 'Total harta bersama', e.jointPropertyTotal);
+    validateMoneyNonNegative(errors, 1, 'deceasedShareOfJointProperty', 'Bagian pewaris dari harta bersama', e.deceasedShareOfJointProperty);
+    const gross = num(currentMoney('grossAssets', e.grossAssets));
+    const joint = num(currentMoney('jointPropertyTotal', e.jointPropertyTotal));
+    const deceasedJoint = num(currentMoney('deceasedShareOfJointProperty', e.deceasedShareOfJointProperty));
+    if (gross <= 0 && joint <= 0) errors.push(issue(1, 'Isi harta pribadi pewaris atau total harta bersama terlebih dahulu.'));
+    if (joint > 0 && deceasedJoint > joint) errors.push(issue(1, 'Bagian pewaris dari harta bersama tidak boleh melebihi total harta bersama.'));
+    return { errors, warnings };
+  }
+  function validateLiabilitiesStep() {
+    const e = st.ci.estate;
+    const errors = [], warnings = [];
+    validateMoneyNonNegative(errors, 2, 'funeralCost', 'Biaya pengurusan jenazah', e.funeralCost);
+    validateMoneyNonNegative(errors, 2, 'medicalCostBeforeDeath', 'Biaya sakit sebelum wafat', e.medicalCostBeforeDeath);
+    validateMoneyNonNegative(errors, 2, 'debts', 'Hutang pewaris', e.debts);
+    const willRows = $$('#wills-list .heir-row');
+    if (willRows.length) {
+      willRows.forEach((row, idx) => {
+        const desc = row.querySelector('[data-will="desc"]');
+        const amount = row.querySelector('[data-will="amount"]');
+        const label = 'Wasiat ke-' + (idx + 1);
+        const descValue = desc ? desc.value.trim() : String((e.wills[idx] && e.wills[idx].desc) || '').trim();
+        const amountValue = amount ? parseMoneyInput(amount.value) : (e.wills[idx] && e.wills[idx].amount);
+        if (amount && amount.dataset.moneyInvalid === 'negative') errors.push(issue(2, label + ' tidak boleh bernilai negatif.'));
+        if (!descValue && num(amountValue) <= 0) errors.push(issue(2, label + ' masih kosong. Isi keterangan dan nominal, atau hapus baris wasiat.'));
+        if (!descValue && num(amountValue) > 0) errors.push(issue(2, label + ' perlu diberi keterangan penerima/tujuan.'));
+        if (descValue && num(amountValue) <= 0) errors.push(issue(2, label + ' perlu nominal lebih dari Rp 0, atau hapus baris wasiat.'));
+      });
+    } else {
+      (e.wills || []).forEach((w, idx) => {
+        const label = 'Wasiat ke-' + (idx + 1);
+        if (Number(w.amount) < 0) errors.push(issue(2, label + ' tidak boleh bernilai negatif.'));
+        if (!(w.desc || '').trim() && num(w.amount) <= 0) errors.push(issue(2, label + ' masih kosong. Isi keterangan dan nominal, atau hapus baris wasiat.'));
+        if ((w.desc || '').trim() && num(w.amount) <= 0) errors.push(issue(2, label + ' perlu nominal lebih dari Rp 0, atau hapus baris wasiat.'));
+      });
+    }
+    return { errors, warnings };
+  }
+  function validateHeirsStep() {
+    const errors = [], warnings = [];
+    const rows = $$('#heirs-list .heir-row');
+    const source = rows.length ? rows : st.ci.heirs;
+    if (!source.length) errors.push(issue(3, 'Tambahkan minimal satu ahli waris.'));
+    if (rows.length) {
+      rows.forEach((row, idx) => {
+        const countEl = row.querySelector('[data-f="count"]');
+        const statusEl = row.querySelector('[data-f="status"]');
+        const count = Number(countEl ? countEl.value : '');
+        if (!Number.isInteger(count) || count < 1) errors.push(issue(3, 'Jumlah ahli waris ke-' + (idx + 1) + ' harus bilangan bulat minimal 1.'));
+        else if (count > 50) errors.push(issue(3, 'Jumlah ahli waris ke-' + (idx + 1) + ' terlihat tidak wajar. Pecah data atau validasi manual bila jumlahnya lebih dari 50.'));
+        if (statusEl && statusEl.value === 'unknown') warnings.push(issue(3, 'Status ahli waris ke-' + (idx + 1) + ' belum pasti. Hasil akan diberi peringatan dan perlu validasi.'));
+      });
+    } else {
+      st.ci.heirs.forEach((h, idx) => {
+        const count = Number(h.count);
+        if (!Number.isInteger(count) || count < 1) errors.push(issue(3, 'Jumlah ahli waris ke-' + (idx + 1) + ' harus bilangan bulat minimal 1.'));
+        else if (count > 50) errors.push(issue(3, 'Jumlah ahli waris ke-' + (idx + 1) + ' terlihat tidak wajar. Pecah data atau validasi manual bila jumlahnya lebih dari 50.'));
+        if (h.religionStatus === 'unknown' || (h.isAliveAtDeath !== true && h.isAliveAtDeath !== false)) warnings.push(issue(3, 'Status ahli waris ke-' + (idx + 1) + ' belum pasti. Hasil akan diberi peringatan dan perlu validasi.'));
+      });
+    }
+    return { errors, warnings };
+  }
+  function mergeValidation(...items) {
+    return { errors: items.flatMap((x) => x.errors || []), warnings: items.flatMap((x) => x.warnings || []) };
+  }
+  function validateStep(step) {
+    if (step === 1) return validateEstateStep();
+    if (step === 2) return validateLiabilitiesStep();
+    if (step === 3) return validateHeirsStep();
+    return { errors: [], warnings: [] };
+  }
+  function validateAllInputs() {
+    return mergeValidation(validateEstateStep(), validateLiabilitiesStep(), validateHeirsStep());
+  }
 
-  function addHeir() { collectStep(); st.ci.heirs.push({ id: 'h' + Date.now(), relation: 'son', gender: 'male', count: 1, religionStatus: 'muslim', isAliveAtDeath: true }); $('#heirs-list').innerHTML = renderHeirRows(); bindHeirEvents(); }
-  function removeHeir(i) { collectStep(); st.ci.heirs.splice(i, 1); $('#heirs-list').innerHTML = renderHeirRows(); bindHeirEvents(); }
-  function addWill() { collectStep(); st.ci.estate.wills.push({ desc: '', amount: '' }); renderWizard(); }
-  function removeWill(i) { collectStep(); st.ci.estate.wills.splice(i, 1); renderWizard(); }
+  function next() {
+    const validation = validateStep(st.step);
+    if (validation.errors.length) {
+      st.validation = validation;
+      renderWizard();
+      toast('Periksa kembali data yang ditandai.');
+      return;
+    }
+    collectStep(); clearValidation();
+    if (st.step < 5) { st.step++; renderWizard(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+  }
+  function prev() { collectStep(); clearValidation(); if (st.step > 0) { st.step--; renderWizard(); window.scrollTo({ top: 0, behavior: 'smooth' }); } }
+  function setMode(m) { st.ci.mode = m; clearValidation(); renderWizard(); }
+
+  function addHeir() {
+    collectStep(); clearValidation();
+    st.ci.heirs.push({ id: 'h' + Date.now(), relation: 'son', gender: 'male', count: 1, religionStatus: 'muslim', isAliveAtDeath: true });
+    const list = $('#heirs-list');
+    list.innerHTML = renderHeirRows();
+    bindHeirEvents();
+    bindViewActions(list);
+  }
+  function removeHeir(i) { collectStep(); clearValidation(); st.ci.heirs.splice(i, 1); const list = $('#heirs-list'); list.innerHTML = renderHeirRows(); bindHeirEvents(); bindViewActions(list); }
+  function addWill() { collectStep(); clearValidation(); st.ci.estate.wills.push({ desc: '', amount: '' }); renderWizard(); }
+  function removeWill(i) { collectStep(); clearValidation(); st.ci.estate.wills.splice(i, 1); renderWizard(); }
 
   // =========================================================================
   // COMPUTE & RESULT
   // =========================================================================
   function compute() {
     collectStep();
-    if (!st.ci.heirs.length) { toast('Tambahkan minimal satu ahli waris.'); return; }
-    if (num(st.ci.estate.grossAssets) <= 0 && num(st.ci.estate.jointPropertyTotal) <= 0) {
-      toast('Masukkan nilai harta terlebih dahulu.'); return;
+    const validation = validateAllInputs();
+    if (validation.errors.length) {
+      const firstStep = validation.errors[0].step;
+      st.step = Number.isInteger(firstStep) ? firstStep : 5;
+      st.validation = validation;
+      go('wizard');
+      toast('Periksa kembali data yang ditandai.');
+      return;
     }
+    clearValidation();
     try {
       st.result = E.calculateInheritance(st.ci);
       renderResult();
@@ -535,7 +715,7 @@
       <p class="lead">Klik tiap langkah untuk melihat dasar hukum (KHI) dan dalil.</p>
       ${r.legalSteps.map((s, i) => `
         <div class="acc-item" id="acc-${i}">
-          <button class="acc-head" onclick="HS.app.toggleAcc(${i})"><span class="num">${i + 1}</span><span class="ttl">${esc(s.title)}</span>${confChip(s.confidence)}${I.caret}</button>
+          <button class="acc-head" data-app-action="toggle-acc" data-index="${i}"><span class="num">${i + 1}</span><span class="ttl">${esc(s.title)}</span>${confChip(s.confidence)}${I.caret}</button>
           <div class="acc-body">
             <div class="row"><span class="k">Konteks</span><div>${esc(s.inputContext)}</div></div>
             <div class="row"><span class="k">Hasil</span><div>${esc(s.result)}</div></div>
@@ -584,13 +764,14 @@
         <div class="card-head"><h2>Simpan & ekspor</h2></div>
         <div class="field"><label>Nama kasus</label><input type="text" id="case-title" value="${esc(st.caseTitle || ('Kasus ' + new Date().toLocaleDateString('id-ID')))}" placeholder="mis. Warisan Bapak Fulan"/></div>
         <div class="actions" style="margin-top:6px;">
-          <button class="btn btn-primary" onclick="HS.app.saveCurrent()">${I.save} Simpan ke perangkat</button>
-          <button class="btn btn-soft" onclick="HS.app.exportCurrent()">${I.download} Ekspor JSON</button>
-          <button class="btn btn-ghost" onclick="HS.app.triggerImport()">${I.upload} Impor JSON</button>
+          <button class="btn btn-primary" data-app-action="save-current">${I.save} Simpan ke perangkat</button>
+          <button class="btn btn-soft" data-app-action="export-current">${I.download} Ekspor JSON</button>
+          <button class="btn btn-ghost" data-app-action="trigger-import">${I.upload} Impor JSON</button>
           <button class="btn btn-ghost" disabled title="Tersedia pada versi berikutnya">${I.pdf} Ekspor PDF (segera)</button>
         </div>
-        <div class="actions" style="margin-top:4px;"><button class="btn btn-ghost btn-sm" onclick="HS.app.go('wizard')">Ubah data</button><button class="btn btn-ghost btn-sm" onclick="HS.app.startNew()">Hitung kasus baru</button></div>
+        <div class="actions" style="margin-top:4px;"><button class="btn btn-ghost btn-sm" data-app-action="go" data-view-target="wizard">Ubah data</button><button class="btn btn-ghost btn-sm" data-app-action="start-new">Hitung kasus baru</button></div>
       </div>`;
+    bindViewActions($('#view-result'));
   }
 
   function badgeType(t) {
@@ -834,14 +1015,17 @@
         <h3 style="font-size:17px;margin-bottom:8px;">Sumber rujukan</h3>
         <p class="lead" style="font-size:14px;">Kompilasi Hukum Islam (KHI) Buku II Hukum Kewarisan; Al-Qur\u2019an Surah An-Nisa ayat 11, 12, 176; serta hadis tentang faraidh. Ringkasan hukum dalam aplikasi bersifat edukatif dan tetap perlu diverifikasi terhadap sumber resmi.</p>
         <div class="disclaimer"><span class="ico">${I.warn}</span><p><b>Catatan keamanan & hukum:</b> Hitung Syariah tidak berpura-pura menjadi hakim, mufti, advokat, atau otoritas final. Aplikasi membantu menghitung, menjelaskan, dan mendokumentasikan — keputusan akhir tetap pada keluarga dan otoritas yang berwenang.</p></div>
-        <div class="actions"><button class="btn btn-primary" onclick="HS.app.startNew()">${I.calc} Mulai hitung waris</button></div>
+        <div class="actions"><button class="btn btn-primary" data-app-action="start-new">${I.calc} Mulai hitung waris</button></div>
       </div>`;
+    bindViewActions($('#view-about'));
   }
 
   // =========================================================================
   // INIT
   // =========================================================================
   function init() {
+    const brandHome = $('#brand-home');
+    if (brandHome) brandHome.addEventListener('click', (ev) => { ev.preventDefault(); go('home'); });
     $$('#nav button').forEach((b) => b.addEventListener('click', () => go(b.dataset.view)));
     $('#import-file').addEventListener('change', (ev) => {
       const f = ev.target.files[0]; if (!f) return;

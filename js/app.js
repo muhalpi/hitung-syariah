@@ -528,11 +528,11 @@
       <div class="saved">
         <div class="info"><b>${esc(c.title)}</b><small>Diperbarui ${new Date(c.updatedAt).toLocaleString('id-ID')} · ${(c.input.heirs || []).length} ahli waris${c.result ? ' · ' + fmt(c.result.estateSummary.netEstate) : ''}</small></div>
         <div class="ops">
-          <button class="btn btn-soft btn-sm" onclick="HS.app.openCase('${c.id}')">Buka</button>
-          <button class="btn btn-ghost btn-sm" onclick="HS.app.renameCasePrompt('${c.id}')">Ubah nama</button>
-          <button class="btn btn-ghost btn-sm" onclick="HS.app.dupCase('${c.id}')">Duplikat</button>
-          <button class="btn btn-ghost btn-sm" onclick="HS.app.exportCase('${c.id}')">${I.download}</button>
-          <button class="btn btn-danger btn-sm" onclick="HS.app.delCase('${c.id}')">${I.trash}</button>
+          <button class="btn btn-soft btn-sm" data-history-action="open" data-case-id="${esc(c.id)}">Buka</button>
+          <button class="btn btn-ghost btn-sm" data-history-action="rename" data-case-id="${esc(c.id)}">Ubah nama</button>
+          <button class="btn btn-ghost btn-sm" data-history-action="duplicate" data-case-id="${esc(c.id)}">Duplikat</button>
+          <button class="btn btn-ghost btn-sm" data-history-action="export" data-case-id="${esc(c.id)}">${I.download}</button>
+          <button class="btn btn-danger btn-sm" data-history-action="delete" data-case-id="${esc(c.id)}">${I.trash}</button>
         </div>
       </div>`).join('') : `<div class="empty">${I.book}<div>Belum ada kasus tersimpan.</div><div class="hint" style="margin-top:6px;">Kasus yang Anda simpan akan muncul di sini, tersimpan lokal di perangkat ini.</div></div>`;
     $('#view-history').innerHTML = `
@@ -540,18 +540,46 @@
         <div class="card-head"><h2>Riwayat perhitungan</h2></div>
         <p class="lead">Semua kasus tersimpan secara lokal di perangkat ini. Tidak ada data yang dikirim ke server.</p>
         <div class="actions" style="margin:4px 0 16px;">
-          <button class="btn btn-primary btn-sm" onclick="HS.app.startNew()">${I.plus} Kasus baru</button>
-          <button class="btn btn-soft btn-sm" onclick="HS.app.triggerImport()">${I.upload} Impor JSON</button>
-          ${cases.length ? `<button class="btn btn-ghost btn-sm" onclick="HS.app.exportAll()">${I.download} Ekspor semua</button><div class="spacer"></div><button class="btn btn-danger btn-sm" onclick="HS.app.clearAll()">${I.trash} Hapus semua data</button>` : ''}
+          <button class="btn btn-primary btn-sm" data-history-action="new">${I.plus} Kasus baru</button>
+          <button class="btn btn-soft btn-sm" data-history-action="import">${I.upload} Impor JSON</button>
+          ${cases.length ? `<button class="btn btn-ghost btn-sm" data-history-action="export-all">${I.download} Ekspor semua</button><div class="spacer"></div><button class="btn btn-danger btn-sm" data-history-action="clear-all">${I.trash} Hapus semua data</button>` : ''}
         </div>
         ${list}
       </div>`;
+    bindHistoryEvents();
+  }
+  function bindHistoryEvents() {
+    $$('#view-history [data-history-action]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.caseId;
+        const action = btn.dataset.historyAction;
+        if (action === 'new') return startNew();
+        if (action === 'import') return triggerImport();
+        if (action === 'export-all') return exportAll();
+        if (action === 'clear-all') return clearAll();
+        if (action === 'open') return openCase(id);
+        if (action === 'rename') return renameCasePrompt(id);
+        if (action === 'duplicate') return dupCase(id);
+        if (action === 'export') return exportCase(id);
+        if (action === 'delete') return delCase(id);
+      });
+    });
   }
   function openCase(id) {
     const c = S.getCase(id); if (!c) return;
     st.ci = mergeBlank(c.input); st.editingId = id; st.caseTitle = c.title;
     if (c.result) { st.result = c.result; renderResult(); go('result'); }
-    else { st.step = 5; go('wizard'); }
+    else {
+      try {
+        st.result = E.calculateInheritance(st.ci);
+        renderResult();
+        go('result');
+      } catch (e) {
+        st.step = 5;
+        go('wizard');
+        toast('Kasus dibuka. Hitung ulang setelah meninjau data.');
+      }
+    }
   }
   function mergeBlank(input) { const b = blank(); return Object.assign(b, input, { estate: Object.assign(b.estate, input.estate || {}), special: Object.assign({}, input.special || {}) }); }
   function renameCasePrompt(id) { const c = S.getCase(id); const n = prompt('Nama kasus:', c ? c.title : ''); if (n) { S.renameCase(id, n); renderHistory(); toast('Nama kasus diperbarui.'); } }
@@ -586,7 +614,7 @@
         <h3 style="font-size:17px;margin-bottom:8px;">Mode KHI vs Faraidh klasik</h3>
         <p class="lead" style="font-size:14px;">Untuk kasus dasar, keduanya memberi hasil sama. Perbedaan muncul pada institusi khusus:</p>
         <div class="data-list">
-          <div class="row"><span class="k">Ahli waris pengganti</span><div>KHI: dikenal (Pasal 185). Faraidh klasik: tidak dikenal.</div></div>
+          <div class="row"><span class="k">Ahli waris pengganti</span><div>KHI: dikenal (Pasal 185), namun MVP saat ini menandainya perlu validasi manual dan belum menghitung otomatis. Faraidh klasik: tidak dikenal.</div></div>
           <div class="row"><span class="k">Wasiat wajibah anak/ortu angkat</span><div>KHI: wajib maks 1/3 (Pasal 209). Faraidh klasik: tidak ada kewajiban.</div></div>
           <div class="row"><span class="k">Sisa harta saat hanya suami/istri</span><div>KHI (praktik PA): diberikan kepada suami/istri (radd). Faraidh klasik: tidak ada radd untuk suami/istri → ke Baitul Mal.</div></div>
         </div>
@@ -608,7 +636,11 @@
       const reader = new FileReader();
       reader.onload = () => {
         const res = S.importJSON(String(reader.result));
-        if (res.ok) { toast(res.added + ' kasus diimpor' + (res.schemaOld ? ' (schema lama)' : '') + '.'); go('history'); }
+        if (res.ok) {
+          const note = res.discardedResults ? ' Hasil lama diabaikan dan akan dihitung ulang.' : '';
+          toast(res.added + ' kasus diimpor' + (res.schemaOld ? ' (schema lama)' : '') + '.' + note);
+          go('history');
+        }
         else toast('Impor gagal: ' + res.error);
         ev.target.value = '';
       };

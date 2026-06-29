@@ -28,8 +28,8 @@ Aplikasi membantu **menghitung, menjelaskan, dan mendokumentasikan**.
 - **Estate lengkap**: harta pribadi, harta bersama (gono-gini), biaya jenazah & sakit, hutang, **wasiat dibatasi 1/3** (kecuali disetujui semua ahli waris).
 - **Dua mode hukum**: **KHI Indonesia** (default) dan **Faraidh klasik** — lihat [perbedaannya](#mode-khi-vs-faraidh-klasik).
 - **Transparansi hukum**: setiap langkah hasil disertai **pasal KHI** dan **dalil Al-Qur'an/Hadis**, dengan tanda `perlu ditinjau` untuk kasus sensitif.
-- **Kasus kompleks**: penghalang waris (KHI Pasal 173), beda agama, ahli waris pengganti (Pasal 185), anak/orang tua angkat → wasiat wajibah (Pasal 209), anak luar perkawinan, poligami, lahan < 2 ha.
-- **Privasi (local-first)**: data **tidak dikirim ke server**. Riwayat disimpan di `localStorage` perangkat. Ekspor/impor JSON tervalidasi.
+- **Kasus kompleks (warning + rekomendasi)**: penghalang waris (KHI Pasal 173), beda agama, ahli waris pengganti (Pasal 185 — belum dihitung otomatis), anak/orang tua angkat → wasiat wajibah (Pasal 209), anak luar perkawinan, poligami, lahan < 2 ha.
+- **Privasi (local-first)**: data **tidak dikirim ke server**. Riwayat disimpan di `localStorage` perangkat. Ekspor/impor JSON divalidasi; hasil dari file impor diabaikan dan dihitung ulang dari input.
 
 ---
 
@@ -57,7 +57,7 @@ Engine dapat diuji **tanpa browser** (pure functions). Test deterministik:
 
 ```bash
 node js/engine.test.js
-# Output: PASS: 35 FAIL: 0
+# Output: PASS: 52 FAIL: 0
 ```
 
 Setiap rule waris **wajib** memiliki unit test. Lihat [`AGENTS.md`](AGENTS.md) §Testing.
@@ -76,7 +76,7 @@ js/
   knowledge-base.js     Pasal KHI + dalil Al-Qur'an/Hadis terstruktur
   engine.js             Engine faraidh (pure functions): dzawil furudh, aul,
                         rad, ashabah, hajb, gharrawain, estate, kasus kompleks
-  storage.js            Riwayat lokal + ekspor/impor JSON tervalidasi
+  storage.js            Riwayat lokal + ekspor/impor JSON tervalidasi ketat
   app.js                Wizard, render hasil, riwayat, ekspor/impor (UI saja)
   engine.test.js        Unit test deterministik (Node)
 docs/
@@ -98,7 +98,7 @@ mengadopsi faraidh). Perbedaan muncul pada institusi khusus:
 
 | Hal | KHI Indonesia | Faraidh klasik |
 |---|---|---|
-| Ahli waris pengganti | Dikenal (Pasal 185) | Tidak dikenal |
+| Ahli waris pengganti | Dikenal (Pasal 185), tetapi MVP saat ini menandai kasus ini perlu validasi manual dan belum menghitung otomatis | Tidak dikenal |
 | Wasiat wajibah anak/ortu angkat | Wajib, maks 1/3 (Pasal 209) | Tidak ada kewajiban |
 | Sisa harta saat hanya ada suami/istri | Diberikan ke pasangan (radd, praktik PA) | Tidak ada radd → Baitul Mal |
 

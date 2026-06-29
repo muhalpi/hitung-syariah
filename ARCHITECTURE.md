@@ -147,8 +147,10 @@ engine atau UI.
 `HS.storage`: `listCases, getCase, saveCase, renameCase, duplicateCase,
 deleteCase, clearAll, exportCase, exportAll, importJSON`. Key
 `hitung-syariah:cases:v1`. Import divalidasi (`validateImport`) — wajib
-`schemaVersion` + array `cases` + setiap kasus punya `input`. Tidak pernah
-mengeksekusi konten file.
+`schemaVersion` + array `cases` + setiap kasus punya `input` yang dapat
+dinormalisasi ke schema MVP. ID dari file impor tidak dipercaya; aplikasi
+membuat ID lokal baru. `result` dari file impor dibuang dan dihitung ulang dari
+`input` saat kasus dibuka. Tidak pernah mengeksekusi konten file.
 
 **Migrasi ke IndexedDB**: pertahankan signature publik `HS.storage`; ganti
 implementasi internal `load/persist` ke Dexie.

@@ -1,8 +1,15 @@
 /* Test deterministik engine waris (dijalankan dengan Node). */
 const g = globalThis;
+g.localStorage = {
+  _data: {},
+  getItem(k) { return this._data[k] || null; },
+  setItem(k, v) { this._data[k] = String(v); },
+  clear() { this._data = {}; },
+};
 require('./fraction.js');
 require('./knowledge-base.js');
 require('./engine.js');
+require('./storage.js');
 const { calculateInheritance } = g.HS.engine;
 
 let pass = 0, fail = 0;
@@ -129,6 +136,66 @@ r = calculateInheritance({ mode: 'faraidh', estate: { grossAssets: 100000000, wi
   heirs: [{ id: 'a', relation: 'wife', count: 1, gender: 'female', religionStatus: 'muslim', isAliveAtDeath: true }], special: {} });
 eq('istri faraidh tetap 1/4', approxFrac(r, 'wife'), '1/4');
 eq('warning sisa ke baitul mal', r.warnings.some((w) => w.type === 'remainder_to_baitulmal'), true);
+
+console.log('TC20: Ahli waris pengganti ditandai unsupported, tidak diam-diam dihitung');
+r = calc(heirs(['grandchild_substitute']));
+eq('pengganti tidak menerima share otomatis', approxFrac(r, 'grandchild_substitute'), '(tidak ada)');
+eq('pengganti masuk excluded unsupported', r.excludedHeirs.some((e) => e.relation === 'grandchild_substitute' && e.excludedReason === 'unsupported_case'), true);
+eq('hasil tidak complete karena unsupported', r.metadata.isComplete, false);
+
+console.log('TC21: Invariant eligible tanpa share → unsupported');
+r = calc(heirs(['full_sister', 2], ['paternal_sister', 1]));
+eq('saudari kandung mendapat seluruh via rad', approxFrac(r, 'full_sister'), '1');
+eq('saudari seayah tidak diam-diam eligible tanpa share', r.excludedHeirs.some((e) => e.relation === 'paternal_sister' && e.excludedReason === 'unsupported_case'), true);
+eq('hasil invariant tidak complete', r.metadata.isComplete, false);
+
+console.log('TC22: Anak angkat bukan ahli waris nasab');
+r = calc(heirs(['son'], ['adopted_child']));
+eq('anak laki-laki tetap menerima seluruh', approxFrac(r, 'son'), '1');
+eq('anak angkat dikeluarkan sebagai wasiat wajibah, bukan waris', r.excludedHeirs.some((e) => e.relation === 'adopted_child' && e.excludedReason === 'wasiat_wajibah_not_inheritance'), true);
+
+console.log('TC23: Status agama belum pasti memberi warning otomatis');
+r = calculateInheritance({ mode: 'khi', estate: { grossAssets: 100000000, wills: [] },
+  heirs: [{ id: 'a', relation: 'son', count: 1, gender: 'male', religionStatus: 'unknown', isAliveAtDeath: true }], special: {} });
+eq('warning agama belum pasti', r.warnings.some((w) => w.type === 'unknown_religion_status'), true);
+
+console.log('TC24: Status hidup belum pasti dan ahli waris minor memberi warning otomatis');
+r = calculateInheritance({ mode: 'khi', estate: { grossAssets: 100000000, wills: [] },
+  heirs: [{ id: 'a', relation: 'daughter', count: 1, gender: 'female', religionStatus: 'muslim', isMinor: true }], special: {} });
+eq('warning status hidup belum pasti', r.warnings.some((w) => w.type === 'uncertain_life_status'), true);
+eq('warning ahli waris minor', r.warnings.some((w) => w.type === 'minor_heir'), true);
+
+console.log('TC25: Import JSON strict, buang result dan ID import');
+g.localStorage.clear();
+const fakeImport = {
+  schemaVersion: '1',
+  cases: [{
+    id: 'x" onclick="alert(1)',
+    title: 'Import berbahaya',
+    input: {
+      mode: 'khi',
+      estate: { grossAssets: 100000000, wills: [] },
+      heirs: [{ id: 'evil', relation: 'son', count: 1, gender: 'male', religionStatus: 'muslim', isAliveAtDeath: true }],
+      special: {},
+    },
+    result: { metadata: { totalFractionCheck: 'fake' }, estateSummary: { netEstate: 999 } },
+  }],
+};
+const imported = g.HS.storage.importJSON(JSON.stringify(fakeImport));
+const saved = g.HS.storage.listCases()[0];
+eq('import sukses', imported.ok, true);
+eq('result import dibuang', saved.result, null);
+eq('id kasus diganti aman', /^case-/.test(saved.id), true);
+eq('id ahli waris diganti aman', /^case-/.test(saved.input.heirs[0].id), true);
+eq('result lama dihitung sebagai dibuang', imported.discardedResults, 1);
+
+console.log('TC26: Import JSON menolak relation tidak dikenal');
+const badImport = {
+  schemaVersion: '1',
+  cases: [{ title: 'Buruk', input: { estate: { grossAssets: 1, wills: [] }, heirs: [{ relation: 'script', count: 1 }] } }],
+};
+const bad = g.HS.storage.importJSON(JSON.stringify(badImport));
+eq('import relation tidak dikenal ditolak', bad.ok, false);
 
 console.log('\n================');
 console.log('PASS:', pass, 'FAIL:', fail);

@@ -200,6 +200,60 @@
 
     // Eligibility
     const { eligible, excluded } = determineEligibility(heirs, mode);
+    const unsupportedExcluded = [];
+    const initialCounts = countByRelation(eligible);
+
+    function excludeEligibleRelation(relation, excludedReason, reason) {
+      for (let i = eligible.length - 1; i >= 0; i--) {
+        if (eligible[i].relation === relation) {
+          unsupportedExcluded.push({ ...eligible[i], excludedReason, reason });
+          eligible.splice(i, 1);
+        }
+      }
+    }
+
+    if (initialCounts.grandchild_substitute > 0) {
+      excludeEligibleRelation('grandchild_substitute', 'unsupported_case',
+        'Ahli waris pengganti belum dihitung otomatis oleh engine; bagian harus divalidasi manual sesuai KHI Pasal 185.');
+      warnings.push({ type: 'unsupported_substitute_heir', severity: 'high',
+        message: 'Terdapat ahli waris pengganti. Engine saat ini belum menghitung bagian ahli waris pengganti otomatis agar tidak memberi hasil hukum yang menyesatkan. Validasi manual diperlukan.' });
+      recommendations.push({ title: 'Validasi ahli waris pengganti',
+        text: 'Tentukan bagian ahli waris pengganti dengan Pengadilan Agama atau ahli faraidh/KHI sebelum pembagian nyata.' });
+    }
+    if (initialCounts.adopted_child > 0) {
+      excludeEligibleRelation('adopted_child', 'wasiat_wajibah_not_inheritance',
+        'Anak angkat tidak otomatis menjadi ahli waris nasab; pertimbangkan wasiat wajibah maksimal 1/3 dalam mode KHI.');
+      warnings.push({ type: 'adopted_child', severity: 'medium',
+        message: 'Terdapat anak angkat. Anak angkat tidak dimasukkan sebagai ahli waris nasab; pertimbangkan wasiat wajibah maksimal 1/3 sesuai KHI Pasal 209.' });
+    }
+    if (initialCounts.adoptive_parent > 0) {
+      excludeEligibleRelation('adoptive_parent', 'wasiat_wajibah_not_inheritance',
+        'Orang tua angkat tidak otomatis menjadi ahli waris nasab; pertimbangkan wasiat wajibah maksimal 1/3 dalam mode KHI.');
+      warnings.push({ type: 'adoptive_parent', severity: 'medium',
+        message: 'Terdapat orang tua angkat. Ia tidak dimasukkan sebagai ahli waris nasab; pertimbangkan wasiat wajibah maksimal 1/3 sesuai KHI Pasal 209.' });
+    }
+    if (initialCounts.uncle > 0) {
+      excludeEligibleRelation('uncle', 'unsupported_case',
+        'Bagian paman belum didukung oleh engine MVP dan perlu validasi manual.');
+    }
+    if (initialCounts.other > 0) {
+      excludeEligibleRelation('other', 'unsupported_case',
+        'Hubungan ahli waris lainnya belum didukung oleh engine MVP dan perlu validasi manual.');
+    }
+
+    if (heirs.some((h) => Math.max(0, Math.floor(Number(h.count) || 0)) > 0 && h.religionStatus === 'unknown')) {
+      warnings.push({ type: 'unknown_religion_status', severity: 'medium',
+        message: 'Ada ahli waris dengan status agama belum pasti. Dalam mode KHI, status agama dapat memengaruhi hak waris; pastikan data sebelum pembagian.' });
+    }
+    if (heirs.some((h) => Math.max(0, Math.floor(Number(h.count) || 0)) > 0 && h.isAliveAtDeath !== true && h.isAliveAtDeath !== false)) {
+      warnings.push({ type: 'uncertain_life_status', severity: 'medium',
+        message: 'Ada ahli waris dengan status hidup saat pewaris wafat yang belum pasti. Hasil dapat berubah bila status ini berbeda.' });
+    }
+    if (heirs.some((h) => Math.max(0, Math.floor(Number(h.count) || 0)) > 0 && h.isMinor)) {
+      warnings.push({ type: 'minor_heir', severity: 'low',
+        message: 'Terdapat ahli waris yang belum dewasa. Bagiannya tetap dihitung bila memenuhi syarat, namun haknya perlu diwakili/dijaga oleh wali sesuai ketentuan hukum.' });
+    }
+
     const counts = countByRelation(eligible);
 
     // ---- Flags ----
@@ -580,8 +634,30 @@
       special, estate, counts: c2, warnings, recommendations, results, estateSummary, step, mode, excluded,
     });
 
+    // Invariant: ahli waris yang masih eligible harus menerima share atau dipindahkan ke daftar tidak dihitung.
+    const relationHasShare = (relation) => {
+      if (relation === 'maternal_brother' || relation === 'maternal_sister') {
+        return results.some((r) => r.relation === 'maternal_sibling');
+      }
+      return results.some((r) => r.relation === relation);
+    };
+    const invariantWarnings = new Set();
+    for (let i = eligible.length - 1; i >= 0; i--) {
+      const h = eligible[i];
+      if (!relationHasShare(h.relation)) {
+        unsupportedExcluded.push({ ...h, excludedReason: 'unsupported_case',
+          reason: 'Engine belum dapat menentukan bagian untuk ' + label(h.relation) + ' dalam komposisi ini; perlu validasi manual.' });
+        if (!invariantWarnings.has(h.relation)) {
+          warnings.push({ type: 'unsupported_share_' + h.relation, severity: 'high',
+            message: label(h.relation) + ' belum mendapat bagian dari engine pada komposisi ini. Hasil ditandai perlu ditinjau agar tidak ada ahli waris yang diam-diam terlewat.' });
+          invariantWarnings.add(h.relation);
+        }
+        eligible.splice(i, 1);
+      }
+    }
+
     // ---- Tidak ada ahli waris ----
-    if (results.length === 0) {
+    if (results.length === 0 && unsupportedExcluded.length === 0) {
       warnings.push({ type: 'no_heirs', severity: 'high',
         message: 'Tidak ada ahli waris yang memenuhi syarat berdasarkan data. Menurut KHI Pasal 191, atas putusan Pengadilan Agama harta dapat diserahkan kepada Baitul Mal.' });
       recommendations.push({ title: 'Konsultasi Pengadilan Agama',
@@ -602,7 +678,7 @@
     results.forEach((r) => { totalCheck = totalCheck.add(r.totalFraction); });
     const distributed = results.reduce((s, r) => s + r.totalRupiah, 0);
     const roundingRemainder = estateSummary.netEstate - distributed;
-    if (Math.abs(roundingRemainder) > 0 && estateSummary.netEstate > 0) {
+    if (totalCheck.equals(new F(1)) && Math.abs(roundingRemainder) > 0 && estateSummary.netEstate > 0) {
       warnings.push({ type: 'rounding_remainder', severity: 'low',
         message: 'Terdapat selisih pembulatan rupiah sebesar ' + fmtIDR(roundingRemainder) + '. Selisih ini muncul karena pembulatan di tampilan; bagian pecahan tetap akurat.' });
     }
@@ -610,7 +686,7 @@
     return {
       estateSummary,
       eligibleHeirs: eligible.map((h) => ({ relation: h.relation, label: label(h.relation), count: h.count, name: h.name })),
-      excludedHeirs: excluded.concat(hajbExcluded).map((h) => ({
+      excludedHeirs: excluded.concat(hajbExcluded, unsupportedExcluded).map((h) => ({
         relation: h.relation, label: label(h.relation), count: h.count, name: h.name,
         excludedReason: h.excludedReason, reason: h.reason,
       })),
@@ -623,7 +699,7 @@
         mode, appVersion: APP_VERSION, schemaVersion: SCHEMA_VERSION,
         calculatedAt: new Date().toISOString(),
         totalFractionCheck: totalCheck.toString(),
-        isComplete: totalCheck.equals(new F(1)) || results.length === 0,
+        isComplete: (totalCheck.equals(new F(1)) || results.length === 0) && unsupportedExcluded.length === 0,
       },
     };
   }

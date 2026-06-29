@@ -26,6 +26,8 @@
     download: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>',
     upload: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>',
     pdf: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>',
+    copy: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>',
+    qr: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3M21 21v.01M12 7v3a2 2 0 0 1-2 2H7M3 12h.01M12 3h.01M12 16v.01M16 12h1M21 12v.01M12 21v-1"/></svg>',
   };
 
   // ---- relations grouped for select ----
@@ -46,6 +48,15 @@
     dzawil: 'Dzawil furudh: ahli waris yang bagiannya telah ditentukan secara pasti dalam Al-Qur\u2019an/KHI.',
     wasiat: 'Wasiat wajibah: pemberian wajib (maks 1/3) untuk pihak tertentu seperti anak angkat menurut KHI.',
   };
+
+  const DONATION_NAME = 'Muhammad Alfi';
+  const DONATION_METHODS = [
+    ['BCA', '8620415481'],
+    ['BRI', '313601028277532'],
+    ['SeaBank', '901901068426'],
+    ['ShopeePay / DANA / OVO / GoPay', '089514317357'],
+  ];
+  const STATIC_QRIS = '00020101021126610014COM.GO-JEK.WWW01189360091436973596810210G6973596810303UMI51440014ID.CO.QRIS.WWW0215ID10253734280240303UMI5204504553033605802ID5921Dejitaru Shop, SMBKRP6008SURABAYA61056019562070703A016304C747';
 
   // ---- state ----
   const blank = () => ({
@@ -72,7 +83,7 @@
   function go(view) {
     $$('.view').forEach((v) => v.classList.remove('active'));
     $$('#nav button').forEach((b) => b.classList.remove('active'));
-    const map = { home: 'home', wizard: 'wizard', result: 'result', history: 'history', about: 'about' };
+    const map = { home: 'home', wizard: 'wizard', result: 'result', history: 'history', donate: 'donate', about: 'about' };
     const v = $('#view-' + (map[view] || 'home'));
     if (v) v.classList.add('active');
     const navBtn = $('#nav button[data-view="' + (view === 'result' ? 'wizard' : view) + '"]');
@@ -81,6 +92,7 @@
     if (view === 'home') renderHome();
     if (view === 'wizard') renderWizard();
     if (view === 'history') renderHistory();
+    if (view === 'donate') renderDonate();
     if (view === 'about') renderAbout();
   }
 
@@ -160,6 +172,67 @@
   }
   function money(name, val, ph) {
     return `<div class="money-input"><input type="text" inputmode="numeric" pattern="[0-9.]*" autocomplete="off" data-money id="${name}" value="${esc(formatMoneyInput(val))}" placeholder="${esc(formatMoneyInput(ph || '0'))}" /></div>`;
+  }
+
+  function qrisTlv(tag, value) {
+    const text = String(value);
+    return tag + String(text.length).padStart(2, '0') + text;
+  }
+  function parseQrisTlv(payload) {
+    const items = [];
+    let i = 0;
+    while (i < payload.length) {
+      const tag = payload.slice(i, i + 2);
+      const len = Number(payload.slice(i + 2, i + 4));
+      if (!tag || !Number.isInteger(len) || i + 4 + len > payload.length) throw new Error('QRIS belum bisa dibuat.');
+      items.push([tag, payload.slice(i + 4, i + 4 + len)]);
+      i += 4 + len;
+    }
+    return items;
+  }
+  function qrisCrc16(data) {
+    let crc = 0xffff;
+    for (let i = 0; i < data.length; i++) {
+      crc ^= data.charCodeAt(i) << 8;
+      for (let j = 0; j < 8; j++) {
+        crc = crc & 0x8000 ? ((crc << 1) ^ 0x1021) & 0xffff : (crc << 1) & 0xffff;
+      }
+    }
+    return crc.toString(16).toUpperCase().padStart(4, '0');
+  }
+  function makeQrisNominal(staticQris, amount) {
+    if (!Number.isSafeInteger(amount) || amount < 1) throw new Error('Masukkan nominal donasi yang valid.');
+    const payload = String(staticQris).trim().replace(/6304[0-9A-Fa-f]{4}$/, '');
+    let result = '';
+    parseQrisTlv(payload).forEach(([tag, rawValue]) => {
+      let value = rawValue;
+      if (tag === '01') value = '12';
+      if (tag === '54') return;
+      result += qrisTlv(tag, value);
+      if (tag === '53') result += qrisTlv('54', String(amount));
+    });
+    result += '6304';
+    return result + qrisCrc16(result);
+  }
+  function copyText(value, label) {
+    const done = () => toast((label || 'Data') + ' disalin.');
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(value).then(done).catch(() => fallbackCopy(value, done));
+      return;
+    }
+    fallbackCopy(value, done);
+  }
+  function fallbackCopy(value, done) {
+    const ta = document.createElement('textarea');
+    ta.value = value;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); done(); }
+    catch (e) { toast('Tidak bisa menyalin otomatis. Salin manual dari layar.'); }
+    ta.remove();
   }
 
   function renderWizard() {
@@ -624,6 +697,109 @@
   function clearAll() { if (confirm('Hapus SEMUA data lokal Hitung Syariah? Tindakan ini tidak dapat dibatalkan.')) { S.clearAll(); renderHistory(); toast('Semua data lokal dihapus.'); } }
   function exportCase(id) { const data = S.exportCase(id); const c = S.getCase(id); if (data) { downloadFile(slug(c.title) + '.json', data); toast('File JSON diunduh.'); } }
   function exportAll() { downloadFile('hitung-syariah-semua-kasus.json', S.exportAll()); toast('Semua kasus diunduh.'); }
+
+  // =========================================================================
+  // DONATE
+  // =========================================================================
+  function renderDonate() {
+    const rows = DONATION_METHODS.map(([name, number]) => `
+      <div class="donate-row">
+        <div class="donate-method">
+          <span>${esc(name)}</span>
+          <b>${esc(number)}</b>
+          <small>a.n. ${esc(DONATION_NAME)}</small>
+        </div>
+        <button class="btn btn-soft btn-sm" type="button" data-copy="${esc(number)}" data-copy-label="${esc(name)}">${I.copy} Salin</button>
+      </div>`).join('');
+
+    $('#view-donate').innerHTML = `
+      <div class="card donate-hero-card">
+        <span class="chip khi">${I.qr} Dukungan pengembangan</span>
+        <h2>Dukung Hitung Syariah</h2>
+        <p class="lead">Donasi membantu pengembangan fitur, verifikasi referensi, dan pemeliharaan aplikasi agar tetap bisa digunakan secara terbuka.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Transfer rekening & e-wallet</h2></div>
+        <p class="lead">Gunakan salah satu nomor berikut. Tombol salin hanya menyalin nomor tujuan.</p>
+        <div class="donate-list">${rows}</div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>QRIS nominal dinamis</h2></div>
+        <p class="lead">Masukkan nominal donasi minimal Rp 1, lalu buat QRIS.</p>
+        <div class="donate-safe-note">${I.check}<span>QRIS ini menggunakan kanal resmi QRIS dan hanya memuat tujuan pembayaran serta nominal. QR tidak meminta data pribadi, kata sandi, atau akses perangkat.</span></div>
+        <form id="donate-qris-form" class="donate-qris-form">
+          <div class="field">
+            <label>Nominal donasi</label>
+            <div class="money-input"><input type="text" inputmode="numeric" pattern="[0-9.]*" autocomplete="off" data-money id="donate-amount" placeholder="10.000" /></div>
+            <div class="hint">Pastikan nominal pada aplikasi pembayaran sudah sesuai sebelum menyelesaikan transaksi.</div>
+          </div>
+          <div class="donate-presets" aria-label="Nominal cepat">
+            <button type="button" class="btn btn-ghost btn-sm" data-donate-amount="10000">Rp 10.000</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-donate-amount="25000">Rp 25.000</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-donate-amount="50000">Rp 50.000</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-donate-amount="100000">Rp 100.000</button>
+          </div>
+          <div class="actions">
+            <button type="submit" class="btn btn-primary">${I.qr} Buat QRIS</button>
+          </div>
+        </form>
+        <div id="donate-qris-message" class="donate-message" role="status"></div>
+        <div id="donate-qris-result" class="qris-result" hidden>
+          <div id="donate-qris-box" class="qris-box" aria-label="Kode QRIS donasi"></div>
+          <div class="qris-meta">
+            <span>Nominal QRIS</span>
+            <b id="donate-qris-amount"></b>
+            <small>Scan dengan aplikasi bank atau e-wallet yang mendukung QRIS.</small>
+          </div>
+        </div>
+      </div>`;
+    bindDonateEvents();
+  }
+  function bindDonateEvents() {
+    const v = $('#view-donate');
+    bindMoneyInputs(v);
+    $$('[data-copy]', v).forEach((btn) => {
+      btn.addEventListener('click', () => copyText(btn.dataset.copy || '', btn.dataset.copyLabel || 'Nomor tujuan'));
+    });
+    $$('[data-donate-amount]', v).forEach((btn) => {
+      btn.addEventListener('click', () => {
+        $('#donate-amount').value = formatMoneyInput(btn.dataset.donateAmount || '');
+        generateDonateQris();
+      });
+    });
+    $('#donate-qris-form').addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      generateDonateQris();
+    });
+  }
+  function generateDonateQris() {
+    const msg = $('#donate-qris-message');
+    const result = $('#donate-qris-result');
+    try {
+      const amount = parseMoneyInput($('#donate-amount').value);
+      const payload = makeQrisNominal(STATIC_QRIS, amount);
+      msg.textContent = '';
+      result.hidden = false;
+      $('#donate-qris-amount').textContent = fmt(amount);
+      renderDonateQris(payload);
+    } catch (e) {
+      result.hidden = true;
+      msg.textContent = e.message || 'QRIS belum bisa dibuat.';
+    }
+  }
+  function renderDonateQris(payload) {
+    const box = $('#donate-qris-box');
+    box.innerHTML = '';
+    if (!global.QRCode) {
+      box.innerHTML = '<div class="qris-unavailable">Generator QR belum tersedia. Coba muat ulang halaman atau gunakan transfer rekening/e-wallet.</div>';
+      return;
+    }
+    const opts = { text: payload, width: 238, height: 238 };
+    if (global.QRCode.CorrectLevel) opts.correctLevel = global.QRCode.CorrectLevel.M;
+    new global.QRCode(box, opts);
+  }
 
   // =========================================================================
   // ABOUT
